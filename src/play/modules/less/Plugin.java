@@ -1,14 +1,23 @@
 package play.modules.less;
 
 import java.io.PrintStream;
+
 import play.Play;
 import play.PlayPlugin;
+import play.exceptions.UnexpectedException;
 import play.mvc.Http.Request;
 import play.mvc.Http.Response;
 import play.vfs.VirtualFile;
 
+
 public class Plugin extends PlayPlugin {
     PlayLessEngine playLessEngine;
+    DynamicImportsResolver resolver;
+    
+    @Override
+    public void onApplicationStart() {
+        resolver = new DynamicImportsResolver(Play.mode.isDev());
+    }
     
     @Override
     public void onLoad() {
@@ -20,6 +29,10 @@ public class Plugin extends PlayPlugin {
     	if(file.getName().endsWith(".less")) {
     		response.contentType = "text/css";
     		try {
+    		    // Resolve dynamic imports
+    		    resolver.createDynamicImports(file);
+    		    
+    		    // Compile the less file into CSS
                 String css = playLessEngine.compile(file.getRealFile());
                 response.status = 200;
                 if(Play.mode == Play.Mode.PROD) {
@@ -27,6 +40,10 @@ public class Plugin extends PlayPlugin {
                 }
                 response.print(css);
             } catch(Exception e) {
+                if(Play.mode.isDev()) {
+                    throw new UnexpectedException(e);
+                }
+                
                 response.status = 500;
                 response.print("Bugger, the LESS processing failed:,\n");
                 e.printStackTrace(new PrintStream(response.out));
@@ -36,5 +53,4 @@ public class Plugin extends PlayPlugin {
 
         return super.serveStatic(file, request, response);
     }
-
 }

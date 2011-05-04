@@ -23,6 +23,50 @@ Now, add the stylesheet to your main template in **app/views/main.html**:
 
 bc. <link type="text/css" rel="stylesheet" href="@{'public/stylesheets/style.less'}" />
 
+h2. Themes
+
+In some applications we want to change the colour scheme and images dynamically, for example depending on the url. Less makes this easy because variables can be defined in a separate file which is then imported. However less @import statements are processed on the server side, which means that variables in less files cannot be set dynamically using play's template mechanism.
+
+In order to be able to set variables dynamically, the less plugin includes a theming mechanism. Write an import statement where the file ends in ".play.less", eg
+
+bc. @import "variables.play.less";
+
+Now create a folder in app/views called themes. In the folder, create templates for each theme that you would like to support:
+
+**app/views/themes/variables.red.less.html:**
+
+bc. @color: red;
+@background: url(/public/images/${theme}/background.png)
+
+**app/views/themes/variables.blue.less.html:**
+
+bc. @color: blue;
+@background: url(/public/images/${theme}/background.png)
+
+You should also create a default template, for when a theme is not explicitly specified:
+
+**app/views/themes/variables.less.html:**
+
+bc. #{include "themes/variables.red.less.html" /}
+
+In order to specify a theme to use, you can call the **#{less.theme}** tag:
+
+bc. #{less.theme '/public/stylesheets/index.less', theme:'blue' /}
+
+The following variables are available to the template:
+* theme - the name of the theme, eg "red"
+* request - the current Http.Request object
+* session - the current Scope.Session object
+* params - the current Scope.Params object
+
+h2. Dynamically Generated Content
+
+If you need more customized behaviour than the themes functionality provides, you can provide your own class that generates the dynamic import file (eg "variables.play.less"). To do so, create a class with the annotation **@LessDynamicFileCreator** (you can import that annotation from the play.modules.less package) and define a method **public static void createDynamicFile(String filePath)**
+
+bc. public static void createDynamicFile(String filePath) {
+    // TODO: Create the file at the given path
+}
+
 h2. Notes
 
 Currently, there is no server-side caching in the plugin. In production mode, the plugin sets the cache-control header to the value specified by http.cacheControl in your application.conf

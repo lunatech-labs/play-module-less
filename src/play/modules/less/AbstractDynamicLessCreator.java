@@ -10,7 +10,7 @@ import play.templates.Template;
 import play.templates.TemplateLoader;
 import play.vfs.VirtualFile;
 
-public abstract class DynamicFileCreator {
+public abstract class AbstractDynamicLessCreator {
 
     public static VirtualFile getTemplateFile(String templatePath) {
         for (VirtualFile vf : Play.templatesPath) {

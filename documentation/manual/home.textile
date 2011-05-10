@@ -61,11 +61,13 @@ The following variables are available to the template:
 
 h2. Dynamically Generated Content
 
-If you need more customized behaviour than the themes functionality provides, you can provide your own class that generates the dynamic import file (eg "variables.play.less"). To do so, create a class with the annotation **@LessDynamicFileCreator** (you can import that annotation from the play.modules.less package) and define a method **public static void createDynamicFile(String filePath)**
+If you need more customized behaviour than the themes functionality provides, you can provide your own class that generates the dynamic import file (eg "variables.play.less"). To do so, create a class with the annotation **@DynamicLessCreator** (you can import that annotation from the play.modules.less package) and define a method **public static LessBlob getLess(String filePath)**
 
-bc. public static void createDynamicFile(String filePath) {
-    // TODO: Create the file at the given path
+bc. public static LessBlob getLess(String filePath) {
+    // TODO: Create the less file contents for the given file path
 }
+
+The method must return a LessBlob object containing a key and the file content. The key is used to determine whether to regenerate the file on subsequent requests. For example the Themes Generator uses the theme as the key.
 
 h2. Notes
 

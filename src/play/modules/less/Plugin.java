@@ -12,16 +12,10 @@ import play.vfs.VirtualFile;
 
 public class Plugin extends PlayPlugin {
     PlayLessEngine playLessEngine;
-    DynamicImportsResolver resolver;
     
     @Override
     public void onApplicationStart() {
-        resolver = new DynamicImportsResolver(Play.mode.isDev());
-    }
-    
-    @Override
-    public void onLoad() {
-    	playLessEngine = new PlayLessEngine(Play.mode == Play.Mode.DEV);
+        playLessEngine = new PlayLessEngine(Play.mode == Play.Mode.DEV);
     }
 
     @Override
@@ -29,9 +23,6 @@ public class Plugin extends PlayPlugin {
     	if(file.getName().endsWith(".less")) {
     		response.contentType = "text/css";
     		try {
-    		    // Resolve dynamic imports
-    		    resolver.createDynamicImports(file);
-    		    
     		    // Compile the less file into CSS
                 String css = playLessEngine.compile(file.getRealFile());
                 response.status = 200;

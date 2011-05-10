@@ -1,26 +1,31 @@
 package play.modules.less;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
-import play.Logger;
+import play.Play;
+import play.cache.Cache;
 import play.exceptions.UnexpectedException;
 import play.mvc.Http.Request;
 import play.vfs.VirtualFile;
 
-public class ThemeCreator extends DynamicFileCreator {
+public class ThemeCreator extends AbstractDynamicLessCreator {
     public static final String THEMES_DIR = "themes/";
     public static final String THEME_TOKEN = "// Theme: ";
+    private static final String CACHE_LIFETIME = "3650d";
 
-    public static void createDynamicFile(String filePath) {
-        VirtualFile dynamicFile = VirtualFile.open(filePath);
-
+    public static LessBlob getLess(String filePath) {
+        // Get the theme from the request
         String theme = Request.current().params.get("theme");
         theme = theme == null ? "" : theme;
         boolean isDefault = theme.length() == 0;
+
+        // Check the cache for the dynamic file
+        String cacheKey = "less-cache-" + theme + "-" + filePath;
+        String content = (String) Cache.get(cacheKey);
+        if (content != null && !Play.mode.isDev()) {
+            return new LessBlob(theme, content);
+        }
 
         // Get the file name from the file path
         String name = filePath.substring(filePath.lastIndexOf("/") + 1);
@@ -44,29 +49,15 @@ public class ThemeCreator extends DynamicFileCreator {
             throw new UnexpectedException(msg);
         }
 
-        // If the template file has not changed since the dynamic file was
-        // generated, then there's no need to regenerate the dynamic file
-        if (dynamicFile.exists() && theme.equals(getTheme(dynamicFile))
-                && (templateFile.getRealFile().lastModified() < dynamicFile.lastModified())) {
-            Logger.trace("Template file %s not modified since dynamic file %s generated",
-                    templatePath, filePath);
-            return;
-        }
-
-        if (!dynamicFile.exists()) {
-            Logger.trace("Dynamic file %s does not yet exist, generating", filePath);
-        } else {
-            Logger.trace("Template file %s has been modified since dynamic file %s generated, "
-                    + "generating dynamic file again", templatePath, filePath);
-        }
-
-        // Generate the dynamic file from the template
+        // Generate the dynamic content from the template
         Map<String, Object> args = new HashMap<String, Object>();
         args.put("theme", theme);
         String dynamicContent = renderTemplate(templatePath, args);
-        dynamicFile.write(THEME_TOKEN + theme + "\n" + dynamicContent);
 
-        Logger.trace("Completed generation of dynamic file %s", filePath);
+        // Save it to the cache
+        Cache.safeSet(cacheKey, dynamicContent, CACHE_LIFETIME);
+
+        return new LessBlob(theme, dynamicContent);
     }
 
     public static boolean themesDefined() {
@@ -75,19 +66,5 @@ public class ThemeCreator extends DynamicFileCreator {
             return false;
         }
         return themesDir.getRealFile().list().length > 0;
-    }
-
-    public static String getTheme(VirtualFile dynamicFile) {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(dynamicFile.inputstream()));
-        try {
-            String line = reader.readLine();
-            if (line.startsWith(THEME_TOKEN)) {
-                return line.substring(THEME_TOKEN.length());
-            }
-        } catch (IOException e) {
-            throw new UnexpectedException(e);
-        }
-
-        return null;
     }
 }

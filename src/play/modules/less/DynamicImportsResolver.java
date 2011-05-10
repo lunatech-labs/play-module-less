@@ -1,7 +1,9 @@
 package play.modules.less;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.EmptyStackException;
 import java.util.HashSet;
 import java.util.List;
@@ -21,19 +23,24 @@ import play.vfs.VirtualFile;
 
 public class DynamicImportsResolver {
     public static final String DYNAMIC_EXT = ".play.less";
+    static Pattern singleCommentPattern = Pattern.compile("//.*$", Pattern.MULTILINE);
+    static Pattern multiCommentPattern = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+    static Pattern importPattern = Pattern.compile("@import\\s+\"(.*)\"");
+
     Method createMethod;
     private boolean isDev;
+    File root;
+    VirtualFile dir;
 
     public DynamicImportsResolver(boolean isDev) {
         this.isDev = isDev;
 
         // Find the user-defined dynamic importer class
-        List<ApplicationClass> classes = Play.classes
-                .getAnnotatedClasses(LessDynamicFileCreator.class);
+        List<ApplicationClass> classes = Play.classes.getAnnotatedClasses(DynamicLessCreator.class);
 
         // If there's more than one, it's an error
         if (classes.size() > 1) {
-            String msg = "Only one class may have the @LessDynamicFileCreator annotation. Found "
+            String msg = "Only one class may have the @DynamicLessCreator annotation. Found "
                     + classes.size() + ":\n";
             for (ApplicationClass clazz : classes) {
                 msg += clazz.name + "\n";
@@ -41,7 +48,7 @@ public class DynamicImportsResolver {
             throw new UnexpectedException(msg);
         }
 
-        // If the user has defined their own Dynamic File Creator, use the
+        // If the user has defined their own Dynamic Less Creator, use the
         // factory method in that class to create files dynamically
         if (classes.size() == 1) {
             ApplicationClass applicationClass = classes.get(0);
@@ -49,26 +56,27 @@ public class DynamicImportsResolver {
 
             // Find the method that creates the dynamic import content
             try {
-                createMethod = clazz.getMethod("createDynamicFile", String.class);
+                createMethod = clazz.getMethod("getLess", String.class);
                 int modifiers = createMethod.getModifiers();
-                if (!Modifier.isPublic(modifiers) || !Modifier.isStatic(modifiers)) {
+                if (!Modifier.isPublic(modifiers) || !Modifier.isStatic(modifiers)
+                        || (!createMethod.getReturnType().isInstance(LessBlob.class))) {
                     throw new RuntimeException("");
                 }
             } catch (Exception e) {
                 throw new UnexpectedException("The class " + clazz.getCanonicalName()
-                        + " with annotation @LessDynamicFileCreator must implement\n"
-                        + "public static void createDynamicFile(String)");
+                        + " with annotation @DynamicLessCreator must implement\n"
+                        + "public static String getLess(String)");
             }
 
             return;
         }
 
-        // If the user has not defined their own Dynamic File Creator, check if
+        // If the user has not defined their own Dynamic Less Creator, check if
         // the user has defined any files in the themes directory. If so, use
         // the ThemeCreator
         if (ThemeCreator.themesDefined()) {
             try {
-                createMethod = ThemeCreator.class.getMethod("createDynamicFile", String.class);
+                createMethod = ThemeCreator.class.getMethod("getLess", String.class);
             } catch (Exception e) {
                 // Should never happen
                 throw new UnexpectedException(e);
@@ -76,72 +84,153 @@ public class DynamicImportsResolver {
         }
     }
 
-    /**
-     * Creates the files on the file system that are imported dynamically
-     */
-    public void createDynamicImports(VirtualFile file) {
+    public File resolveImports(File file) {
         // Check if there are any dynamic imports to resolve
         if (createMethod == null && !isDev) {
-            return;
+            return null;
+        }
+
+        // Play does not parse the query string into request parameters for
+        // static files, so we do it here manually, in case it's needed by the
+        // dynamic file creators
+        parseQueryString();
+
+        // Create the output directory if it doesn't already exist
+        if (root == null) {
+            String stylesheetsDir = "/public/stylesheets";
+            root = Play.getFile(stylesheetsDir);
+            dir = VirtualFile.open(root.getAbsoluteFile() + "/play-less");
+            createDir(dir.getRealFile().getAbsolutePath());
         }
 
         Set<String> imports = new HashSet<String>();
         Set<String> dynamicImports = new HashSet<String>();
-        getDynamicImports(file, imports, dynamicImports);
-
-        if (createMethod == null && dynamicImports.size() > 0) {
-            throw new UnexpectedException("Found @import statement with dynamic import "
-                    + "(an @import file with the extension '" + DYNAMIC_EXT + "'):\n"
-                    + dynamicImports.toArray()[0] + "\n"
-                    + "but did not find class with annotation @LessDynamicFileCreator. "
-                    + "Create a class with the @LessDynamicFileCreator annotation.");
-        }
-
-        // Play does not parse the query string into request parameters for
-        // static files, so we do it here manually
-        parseQueryString();
-
-        try {
-            for (String filePath : dynamicImports) {
-                createMethod.invoke(null, filePath);
-            }
-        } catch (Exception e) {
-            throw new UnexpectedException(e);
-        }
+        return resolveImports(VirtualFile.open(file), imports, dynamicImports);
     }
 
-    static Pattern singleCommentPattern = Pattern.compile("//.*$", Pattern.MULTILINE);
-    static Pattern multiCommentPattern = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
-    static Pattern importPattern = Pattern.compile("@import\\s+\"(.*)\"");
-
-    private static void getDynamicImports(VirtualFile file, Set<String> imports,
-            Set<String> dynamicImports) {
+    private File resolveImports(VirtualFile file, Set<String> imports, Set<String> dynamicImports) {
 
         // Remove comments
-        String content = file.contentAsString().replace("", "");
+        String content = file.contentAsString();
         content = singleCommentPattern.matcher(content).replaceAll("");
         content = multiCommentPattern.matcher(content).replaceAll("");
+        String parentNewPath = getNewPath(file.getRealFile().getAbsolutePath());
 
         // Find all import statements
         Matcher matcher = importPattern.matcher(content);
-        while (matcher.find()) {
-            String fileName = matcher.group(1);
-            String path = file.getRealFile().getParent() + "/" + fileName;
+        int startIndex = 0;
+        while (matcher.find(startIndex)) {
+            String relativePath = matcher.group(1);
+            String path = file.getRealFile().getParent() + "/" + relativePath;
             path = normalizePath(path);
+            String newPath = getNewPath(path);
 
             // If it's a dynamic import, add it to the list
-            if (fileName.endsWith(DYNAMIC_EXT)) {
-                dynamicImports.add(path);
-            } else if (!imports.contains(path)) {
-                // If it's a normal import, check the imported file for more
-                // imports
-                VirtualFile virtualFile = VirtualFile.open(path);
-                if (!virtualFile.exists()) {
-                    throw new UnexpectedException("Could not find import " + path);
+            if (relativePath.endsWith(DYNAMIC_EXT)) {
+                if (createMethod == null) {
+                    String msg = "Found @import statement with dynamic import " + "'"
+                            + relativePath + "' in file '" + file.getRealFile().getAbsolutePath()
+                            + "' " + "but did not find class with annotation @DynamicLessCreator. "
+                            + "Create a class with the @DynamicLessCreator annotation.";
+                    throw new UnexpectedException(msg);
                 }
-                getDynamicImports(virtualFile, imports, dynamicImports);
+
+                if (!dynamicImports.contains(newPath)) {
+                    try {
+                        LessBlob importContent = (LessBlob) createMethod.invoke(null, path);
+                        newPath = getPathWithKey(newPath, importContent.key);
+                        writeContent(newPath, importContent.content);
+                        dynamicImports.add(newPath);
+                    } catch (Exception e) {
+                        // Should never happen
+                        throw new UnexpectedException(e);
+                    }
+                }
+            } else {
+                if (!imports.contains(newPath)) {
+                    // If it's a normal import, check the imported file for more
+                    // imports
+                    VirtualFile virtualFile = VirtualFile.open(path);
+                    if (!virtualFile.exists()) {
+                        throw new UnexpectedException("Could not find import " + path);
+                    }
+                    resolveImports(virtualFile, imports, dynamicImports);
+                }
+            }
+
+            // Replace the import statement with the new path
+            String newImport = "@import \"" + getRelativePath(parentNewPath, newPath) + "\"";
+            int start = matcher.start();
+            content = content.substring(0, start) + newImport + content.substring(matcher.end());
+            matcher.reset(content);
+            startIndex = start + newImport.length();
+        }
+
+        VirtualFile newFile = writeContent(parentNewPath, content);
+        imports.add(parentNewPath);
+        return newFile.getRealFile();
+    }
+
+    private VirtualFile writeContent(String newPath, String importContent) {
+        createParentDir(newPath);
+        VirtualFile file = VirtualFile.open(newPath);
+        if (!file.exists() || isDev) {
+            file.write(importContent);
+        }
+        return file;
+    }
+
+    private String getNewPath(String path) {
+        String rootPath = root.getAbsolutePath();
+        if (!path.startsWith(rootPath)) {
+            throw new UnexpectedException("All imports must be inside the directory '" + rootPath
+                    + "'. Found import that references file outside the root path: '" + path + "'");
+        }
+
+        return dir.getRealFile().getAbsolutePath() + path.substring(rootPath.length());
+    }
+
+    private String getPathWithKey(String newPath, String key) {
+        int end = newPath.lastIndexOf(DYNAMIC_EXT);
+        if (end == -1 || key.length() == 0) {
+            return newPath;
+        }
+
+        return newPath.substring(0, end) + "-" + key + DYNAMIC_EXT;
+    }
+
+    public static String getRelativePath(String fromPath, String toPath) {
+        String[] fromPartsWithName = fromPath.split("/");
+        String[] fromParts = new String[fromPartsWithName.length - 1];
+        System.arraycopy(fromPartsWithName, 0, fromParts, 0, fromParts.length);
+
+        String[] toPartsWithName = toPath.split("/");
+        String[] toParts = new String[toPartsWithName.length - 1];
+        System.arraycopy(toPartsWithName, 0, toParts, 0, toParts.length);
+
+        int diffIndex = getDifferenceIndex(fromParts, toParts);
+        List<String> relativePath = new ArrayList<String>(fromParts.length + toParts.length);
+        for (int i = diffIndex; i < fromParts.length; i++) {
+            relativePath.add("..");
+        }
+        for (int i = diffIndex; i < toParts.length; i++) {
+            relativePath.add(toParts[i]);
+        }
+        relativePath.add(toPartsWithName[toPartsWithName.length - 1]);
+
+        return JavaExtensions.join(relativePath, "/");
+    }
+
+    private static int getDifferenceIndex(String[] fromParts, String[] toParts) {
+        for (int i = 0; i < fromParts.length; i++) {
+            if (i > toParts.length - 1) {
+                return i;
+            }
+            if (!fromParts[i].equals(toParts[i])) {
+                return i;
             }
         }
+        return fromParts.length;
     }
 
     public static String normalizePath(String path) {
@@ -160,6 +249,26 @@ public class DynamicImportsResolver {
         }
 
         return (path.charAt(0) == '/' ? "/" : "") + JavaExtensions.join(normalized, "/");
+    }
+
+    private void createDir(String path) {
+        File f = new File(path);
+        if (!f.exists() && !f.mkdirs()) {
+            throw new UnexpectedException("Could not create directory at " + path);
+        }
+    }
+
+    private void createParentDir(String path) {
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash == -1) {
+            return;
+        }
+
+        String dirPath = path.substring(0, lastSlash);
+        File f = new File(dirPath);
+        if (!f.exists() && !f.mkdirs()) {
+            throw new UnexpectedException("Could not create directory for " + path);
+        }
     }
 
     public static void parseQueryString() {

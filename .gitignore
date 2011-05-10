@@ -1,6 +1,8 @@
 lib/play-less.jar
+bin
 dist
 tmp
 .project
 .classpath
 .settings
+*.class

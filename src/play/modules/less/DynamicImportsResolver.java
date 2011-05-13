@@ -29,12 +29,17 @@ public class DynamicImportsResolver {
 
     Method createMethod;
     private boolean isDev;
-    File root;
-    VirtualFile dir;
 
     public DynamicImportsResolver(boolean isDev) {
         this.isDev = isDev;
 
+        findCreateMethod();
+        if (createMethod != null) {
+            clearCache();
+        }
+    }
+
+    private void findCreateMethod() {
         // Find the user-defined dynamic importer class
         List<ApplicationClass> classes = Play.classes.getAnnotatedClasses(DynamicLessCreator.class);
 
@@ -84,6 +89,48 @@ public class DynamicImportsResolver {
         }
     }
 
+    private void clearCache() {
+        File cacheDir = getCacheDir().getRealFile();
+        deleteFile(cacheDir, cacheDir);
+    }
+
+    private void deleteFile(File originalFile, File file) {
+        if (!file.exists()) {
+            return;
+        }
+
+        // Sanity check
+        String absolutePath = file.getAbsolutePath();
+        if (absolutePath.length() < 10) {
+            return;
+        }
+
+        // More sanity checking
+        if (!absolutePath.startsWith(originalFile.getAbsolutePath())) {
+            return;
+        }
+
+        // Delete children
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            for (File child : children) {
+                deleteFile(originalFile, child);
+            }
+        }
+
+        // Delete the file
+        file.delete();
+    }
+
+    private File getRoot() {
+        String stylesheetsDir = "/public/stylesheets";
+        return Play.getFile(stylesheetsDir);
+    }
+
+    private VirtualFile getCacheDir() {
+        return VirtualFile.open(getRoot().getAbsoluteFile() + "/play-less");
+    }
+
     public File resolveImports(File file) {
         // Check if there are any dynamic imports to resolve
         if (createMethod == null && !isDev) {
@@ -96,12 +143,7 @@ public class DynamicImportsResolver {
         parseQueryString();
 
         // Create the output directory if it doesn't already exist
-        if (root == null) {
-            String stylesheetsDir = "/public/stylesheets";
-            root = Play.getFile(stylesheetsDir);
-            dir = VirtualFile.open(root.getAbsoluteFile() + "/play-less");
-            createDir(dir.getRealFile().getAbsolutePath());
-        }
+        createDir(getCacheDir().getRealFile().getAbsolutePath());
 
         Set<String> imports = new HashSet<String>();
         Set<String> dynamicImports = new HashSet<String>();
@@ -181,13 +223,13 @@ public class DynamicImportsResolver {
     }
 
     private String getNewPath(String path) {
-        String rootPath = root.getAbsolutePath();
+        String rootPath = getRoot().getAbsolutePath();
         if (!path.startsWith(rootPath)) {
             throw new UnexpectedException("All imports must be inside the directory '" + rootPath
                     + "'. Found import that references file outside the root path: '" + path + "'");
         }
 
-        return dir.getRealFile().getAbsolutePath() + path.substring(rootPath.length());
+        return getCacheDir().getRealFile().getAbsolutePath() + path.substring(rootPath.length());
     }
 
     private String getPathWithKey(String newPath, String key) {

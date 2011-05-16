@@ -100,13 +100,13 @@ public class DynamicImportsResolver {
         }
 
         // Sanity check
-        String absolutePath = file.getAbsolutePath();
+        String absolutePath = normalizePath(file.getAbsolutePath());
         if (absolutePath.length() < 10) {
             return;
         }
 
         // More sanity checking
-        if (!absolutePath.startsWith(originalFile.getAbsolutePath())) {
+        if (!absolutePath.startsWith(normalizePath(originalFile.getAbsolutePath()))) {
             return;
         }
 

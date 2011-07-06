@@ -23,10 +23,11 @@ Now, add the stylesheet to your main template in **app/views/main.html**:
 
 bc. <link type="text/css" rel="stylesheet" href="@{'public/stylesheets/style.less'}" />
 
-h2. Caching
-
-The less module sets and listens to Last-Modified and ETag headers, so most browsers will retrieve the file only once. At the server, a compiled CSS file is stored in the cache, and automatically invalidated when the less file changes. So you can change your less files even while Play is running in production mode.
-
 h2. Notes
 
+Currently, there is no server-side caching in the plugin. In production mode, the plugin sets the cache-control header to the value specified by http.cacheControl in your application.conf
+
 In case of an error in your less file, the error will be shown on your page to help you debug.
+
+
+

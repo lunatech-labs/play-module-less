@@ -2,6 +2,7 @@ package play.modules.less;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.Date;
 import java.util.List;
 import org.mozilla.javascript.WrappedException;
 
@@ -9,6 +10,7 @@ import com.asual.lesscss.LessEngine;
 import com.asual.lesscss.LessException;
 
 import play.Logger;
+import play.cache.Cache;
 
 /**
  * LessEngine wrapper for Play
@@ -22,8 +24,21 @@ public class PlayLessEngine {
         lessEngine = new LessEngine();
         this.devMode = devMode; 
     }
+    
+    /**
+     * Get the CSS for this less file either from the cache, or compile it.
+     */
+    public String get(File lessFile) {
+        String cacheKey = "less_" + lessFile.getPath() + lessFile.lastModified();
+        String css = (String) Cache.get(cacheKey);
+        if(css == null) {
+            css = compile(lessFile);
+            Cache.set(cacheKey, css);
+        }
+        return css;
+    }
 
-    public String compile(File lessFile) {
+    protected String compile(File lessFile) {
     	try {
 			return lessEngine.compile(lessFile);
 		} catch (LessException e) {

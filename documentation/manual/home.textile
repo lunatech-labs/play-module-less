@@ -25,7 +25,7 @@ bc. <link type="text/css" rel="stylesheet" href="@{'public/stylesheets/style.les
 
 h2. Caching
 
-The less module sets and listens to Last-Modified and ETag headers, so most browsers will retrieve the file only once. At the server, a compiled CSS file is stored in the cache, and automatically invalidated when the less file changes. So you can change your less files even while Play is running in production mode.
+The less module sets and listens to Last-Modified and ETag headers, so most browsers will retrieve the file only once. At the server, a compiled CSS file is stored in the cache, and automatically invalidated when the less file changes, or when one of the imported files change. So you can change your less files even while Play is running in production mode.
 
 h2. Notes
 

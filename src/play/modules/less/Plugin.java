@@ -40,7 +40,7 @@ public class Plugin extends PlayPlugin {
     }
     
     private void handleResponse(VirtualFile file, Request request, Response response) {
-        long lastModified = file.lastModified();
+        long lastModified = playLessEngine.lastModifiedRecursive(file.getRealFile());
         final String etag = "\"" + lastModified + "-" + file.hashCode() + "\"";
         
         if(!request.isModified(etag, lastModified)) {

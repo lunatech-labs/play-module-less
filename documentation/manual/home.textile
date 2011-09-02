@@ -1,4 +1,6 @@
-h1. Less module
+h1. Less module compatible with Coffeescript module
+
+*This version of the less module has been adapted to be compatible with the coffeescript module (or other software using Rhino 1.7). If you don't experience issues, use the regular less module versions.* 
 
 This module allows you to use "LESS":http://lesscss.org/ stylesheets in your Play application, without having to manually compile them to CSS. It is inspired by the sass plugin that does a similar thing for sass.
 

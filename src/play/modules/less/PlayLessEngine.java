@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.mozilla.javascript.WrappedException;
+import compat16.org.mozilla.javascript.WrappedException;
 
 import com.asual.lesscss.LessEngine;
 import com.asual.lesscss.LessException;

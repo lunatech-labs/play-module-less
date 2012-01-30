@@ -6,6 +6,7 @@ import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.LAST_MODIFIED
 import java.io.PrintStream;
 import java.util.Date;
 
+import play.Logger;
 import play.Play;
 import play.PlayPlugin;
 import play.mvc.Http;
@@ -32,11 +33,11 @@ public class Plugin extends PlayPlugin {
             } catch(Exception e) {
                 response.status = 500;
                 response.print("Bugger, the LESS processing failed:,\n");
-                e.printStackTrace(new PrintStream(response.out));
+                Logger.error(e, "less error");
             }
             return true;
         }
-        return super.serveStatic(file, request, response);
+        return false;
     }
     
     private void handleResponse(VirtualFile file, Request request, Response response) {

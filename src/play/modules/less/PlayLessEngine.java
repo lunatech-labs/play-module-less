@@ -16,6 +16,7 @@ import org.mozilla.javascript.WrappedException;
 import com.asual.lesscss.LessEngine;
 import com.asual.lesscss.LessException;
 
+import play.Play;
 import play.Logger;
 import play.cache.Cache;
 
@@ -37,7 +38,7 @@ public class PlayLessEngine {
      * Get the CSS for this less file either from the cache, or compile it.
      */
     public String get(File lessFile) {
-        String cacheKey = "less_" + lessFile.getPath() + lastModifiedRecursive(lessFile);
+        String cacheKey = "less_" + lessFile.getPath() + (Play.mode.isDev()?lastModifiedRecursive(lessFile):"");
         String css = Cache.get(cacheKey, String.class);
         if(css == null) {
             css = compile(lessFile);
@@ -82,10 +83,13 @@ public class PlayLessEngine {
           Matcher m = importPattern.matcher(line);
           while (m.find()) {
               File file = new File(lessFile.getParentFile(), m.group(1));
+              if (!file.exists())
+                  file = new File(lessFile.getParentFile(), m.group(1) + ".less");
               files.add(file);
               files.addAll(getImportsFromCacheOrFile(file));
           }
         }
+        r.close();
         return files;
     }
 

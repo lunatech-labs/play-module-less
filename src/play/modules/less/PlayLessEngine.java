@@ -55,11 +55,14 @@ public class PlayLessEngine {
         return lastModified;
     }
     
+    @SuppressWarnings("unchecked")
     protected Set<File> getImportsFromCacheOrFile(File lessFile) {
         String cacheKey = "less_imports_" + lessFile.getPath() + lessFile.lastModified();
         
-        @SuppressWarnings("unchecked")
-        Set<File> files = Cache.get(cacheKey, Set.class);
+        Set<File> files = null;
+        try {
+            files = Cache.get(cacheKey, Set.class);
+        } catch(Exception e) {} // Play 1.2.4 throws an NPE when the first request hits the cache.
         
         if(files == null) {
             try {

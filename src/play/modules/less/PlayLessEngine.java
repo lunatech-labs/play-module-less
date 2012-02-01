@@ -89,6 +89,8 @@ public class PlayLessEngine {
               files.addAll(getImportsFromCacheOrFile(file));
           }
         }
+        
+        r.close();
         return files;
     }
 

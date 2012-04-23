@@ -13,6 +13,8 @@ import java.util.regex.Pattern;
 
 import org.mozilla.javascript.WrappedException;
 
+import org.apache.commons.io.IOUtils;
+
 import com.asual.lesscss.LessEngine;
 import com.asual.lesscss.LessException;
 
@@ -78,20 +80,23 @@ public class PlayLessEngine {
     
     protected Set<File> getImportsFromFile(File lessFile) throws IOException {
         BufferedReader r = new BufferedReader(new FileReader(lessFile));
-
-        Set<File> files = new HashSet<File>();
-        String line;
-        while ((line = r.readLine()) != null) {
-          Matcher m = importPattern.matcher(line);
-          while (m.find()) {
-              File file = new File(lessFile.getParentFile(), m.group(1));
-              files.add(file);
-              files.addAll(getImportsFromCacheOrFile(file));
+        try {
+          Set<File> files = new HashSet<File>();
+          String line;
+          while ((line = r.readLine()) != null) {
+            Matcher m = importPattern.matcher(line);
+            while (m.find()) {
+                File file = new File(lessFile.getParentFile(), m.group(1));
+                if (!file.exists())
+                    file = new File(lessFile.getParentFile(), m.group(1) + ".less");
+                files.add(file);
+                files.addAll(getImportsFromCacheOrFile(file));
+            }
           }
+          return files;
+        } finally {
+          IOUtils.closeQuietly(r);
         }
-        
-        r.close();
-        return files;
     }
 
     protected String compile(File lessFile) {

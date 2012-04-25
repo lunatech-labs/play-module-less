@@ -40,10 +40,10 @@ public class PlayLessEngine {
      */
     public String get(File lessFile) {
         String cacheKey = "less_" + lessFile.getPath() + lastModifiedRecursive(lessFile);
-        String css = Cache.get(cacheKey, String.class);
+        String css = cacheGet(cacheKey, String.class);
         if (css == null) {
             css = compile(lessFile);
-            Cache.set(cacheKey, css);
+            cacheSet(cacheKey, css);
         }
         return css;
     }
@@ -57,20 +57,16 @@ public class PlayLessEngine {
         return lastModified;
     }
 
-    @SuppressWarnings("unchecked")
     protected Set<File> getImportsFromCacheOrFile(File lessFile) {
         String cacheKey = "less_imports_" + lessFile.getPath() + lessFile.lastModified();
 
         Set<File> files = null;
-        try {
-            files = Cache.get(cacheKey, Set.class);
-        } catch (Exception e) {
-        } // Play 1.2.4 throws an NPE when the first request hits the cache.
+        cacheGet(cacheKey, Set.class);
 
         if (files == null) {
             try {
                 files = getImportsFromFile(lessFile);
-                Cache.set(cacheKey, files);
+                cacheSet(cacheKey, files);
             } catch (IOException e) {
                 Logger.error(e, "IOException trying to determine imports in LESS file");
                 files = new HashSet<File>();
@@ -141,5 +137,22 @@ public class PlayLessEngine {
 
     public String formatMessage(String filename, int line, int column, String extract, String errorType) {
         return "body:before {display: block; color: #c00; white-space: pre; font-family: monospace; background: #FDD9E1; border-top: 1px solid pink; border-bottom: 1px solid pink; padding: 10px; content: \"[LESS ERROR] " + String.format("%s:%s: %s (%s)", filename, line, extract, errorType) + "\"; }";
+    }
+
+    private static <T> T cacheGet(String key, Class<T> clazz) {
+        try {
+            return Cache.get(key, clazz);
+        } catch (NullPointerException e) {
+            Logger.info("LESS module: Cache not initialized yet. Request to regular action required to initialize cache in DEV mode.");
+            return null;
+        }
+    }
+
+    private static void cacheSet(String key, Object value) {
+        try {
+            Cache.set(key, value);
+        } catch (NullPointerException e) {
+            Logger.info("LESS module: Cache not initialized yet. Request to regular action required to initialize cache in DEV mode.");
+        }
     }
 }

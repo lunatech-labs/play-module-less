@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -79,6 +80,10 @@ public class PlayLessEngine {
     }
     
     protected Set<File> getImportsFromFile(File lessFile) throws IOException {
+        if(!lessFile.exists()) {
+            return Collections.emptySet();
+        }
+        
         BufferedReader r = new BufferedReader(new FileReader(lessFile));
         try {
           Set<File> files = new HashSet<File>();
@@ -131,7 +136,7 @@ public class PlayLessEngine {
     		}
     	}
     	
-    	return formatMessage(filename, e.getLine(), e.getColumn(), extract, e.getErrorType());
+    	return formatMessage(filename, e.getLine(), e.getColumn(), extract, e.getType());
     }
     
     public String formatMessage(String filename, int line, int column, String extract, String errorType) {

@@ -102,7 +102,7 @@ public class PlayLessEngine {
 
     protected String compile(File lessFile) {
         try {
-            return lessEngine.compile(lessFile);
+            return lessEngine.compile(lessFile, !devMode);
         } catch (LessException e) {
             return handleException(lessFile, e);
         }

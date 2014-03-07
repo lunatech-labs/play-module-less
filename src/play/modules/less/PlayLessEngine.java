@@ -60,8 +60,7 @@ public class PlayLessEngine {
     protected Set<File> getImportsFromCacheOrFile(File lessFile) {
         String cacheKey = "less_imports_" + lessFile.getPath() + lessFile.lastModified();
 
-        Set<File> files = null;
-        cacheGet(cacheKey, Set.class);
+        Set<File> files = cacheGet(cacheKey, Set.class);
 
         if (files == null) {
             try {
